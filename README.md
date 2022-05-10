@@ -1,5 +1,5 @@
 ## eddycovariance_postprocessing
-# Post Processing of eddy covariance data
+## Post Processing of eddy covariance data
 This repository summarizes the Post-Processing methodology used for the eddy covariance data measured at Alerce Costero National Park and Biological Station Senda Darwin, Chile.
 The aim of this methodology is to obtain filtered, screened and filled data from the flux towers.
 
