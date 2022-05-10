@@ -3,7 +3,7 @@
 This repository summarizes the Post-Processing methodology used for the eddy covariance data measured at Alerce Costero National Park and Biological Station Senda Darwin, Chile.
 The aim of this methodology is to obtain filtered, screened and filled data from the flux towers.
 
-# The initial level of this data is a high frequency raw data that is obtained at a 20 Hz frequency
+# The initial level of this data is high frequency raw data that is obtained at a 20 Hz frequency
 
 # The second step is the data processed in the software EddyPro in which the following corrections are applied:
 **Eddypro - General Operations**
