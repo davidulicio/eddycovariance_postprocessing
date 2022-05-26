@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Eddy Covariance Post-Processing Script - Forest SD
+Eddy Covariance Post-Processing Script - Peatland SD
 @author: David Trejo
 V1.0 (2022-03-23)
 """
@@ -26,8 +26,8 @@ units_era5 = pd.read_csv(path+'metadata.csv')['units']
 vars_era5 = pd.read_csv(path+'metadata.csv')['long_name']
 date_era5 = pd.DatetimeIndex(ds['time']) - pd.Timedelta(hours=3)  # UTC to local time
 "Eddy data"
-path = 'C:/Users/PC5 LECS/Desktop/Tovi data/Inputs/SDF/'
-filename = 'eddypro_forest_full_output_2022-03-27T111527_adv.csv'
+path = 'C:/Users/PC5 LECS/Desktop/Tovi data/Inputs/SDP/'
+filename = 'eddypro_peatland_full_output_2022-04-12T201213_adv.csv'
 eddy_data = pd.read_csv(path+filename, skiprows=[0], low_memory=(False))
 eddy_units = eddy_data.iloc[0]; eddy_data = eddy_data[1:]
 bool_repeated = eddy_data.duplicated(keep='first')
@@ -35,7 +35,7 @@ eddy_data = eddy_data[~bool_repeated]  # Erase repeated data
 date = pd.DatetimeIndex(eddy_data['date'].astype(str) + ' ' +
                         eddy_data['time'].astype(str))
 "Biomet data"
-path = 'D:/Dropbox/David/LECS/eddy/Bosque/Biomet from Raw (TOA5)/'
+path = 'D:/Dropbox/David/LECS/eddy/Turbera/Biomet from Raw (TOA5)/'
 filename = 'biomet_20140101_20220226.csv'
 biomet_data = pd.read_csv(path+filename, low_memory=(False))
 biomet_units = biomet_data.iloc[0]; biomet_data = biomet_data[1:]
@@ -50,7 +50,7 @@ date_biomet = pd.DatetimeIndex(biomet_data['TIMESTAMP_1'].astype(str)+'/'+
 # General constants
 undef = -9999  # Non valid data value
 # U-star filtering
-ustarmin = 0.1  # Forest ustar minimum 
+ustarmin = 0.01  # Peatland ustar minimum 
 nboot = 100  # N° of boot straps for estimating the confidence interval of u* threshold
 # Configurable Gap-filling
 sw_dev = 50  # Max deviation of SW_IN
@@ -512,11 +512,23 @@ def energy_balance_residual_correction(EBR, F, day_mask):
 #     # Linear Support Vector Regression as implemented in Kang et al (2019).
 
 
+def extreme_values_reading(colname, data):
+    tmp = data[colname]
+    var = np.zeros(len(tmp)) * np.nan
+    for i in range(len(tmp)):
+        try:
+            var[i] = np.float(tmp.iloc[i])
+        except ValueError:
+            print('In '+colname+ ' there are some extreme computing values.')
+            print(str(tmp.iloc[i]) + ' was turned into 0.')
+            var[i] = 0
+    return var
+
 #%% Reading necessary variables - Dependencies
 print('Reading necessary variables')
 print('....................................')
 co2_var = var_reading('co2_var', eddy_data, True)
-h2o_var = var_reading('h2o_var', eddy_data, True)
+h2o_var = extreme_values_reading('h2o_var', eddy_data)
 u_var = var_reading('u_var', eddy_data, True)
 v_var = var_reading('v_var', eddy_data, True)
 w_var = var_reading('w_var', eddy_data, True)
@@ -563,18 +575,18 @@ co2_strg = var_reading('co2_strg', eddy_data, True)
 h2o_strg = var_reading('h2o_strg', eddy_data, True)
 NEE = FCO2 + co2_strg
 co2_mix_ratio = var_reading('co2_mixing_ratio', eddy_data, True)
-h2o_mix_ratio = var_reading('h2o_mixing_ratio', eddy_data, True)
+h2o_mix_ratio = extreme_values_reading('h2o_mixing_ratio', eddy_data)
 air_temperature = var_reading('air_temperature', eddy_data, True)
 sonic_temperature = var_reading('sonic_temperature', eddy_data, True)
 air_pressure = var_reading('air_pressure', eddy_data, True)
 ET = var_reading('ET', eddy_data, True)
 RH = var_reading('RH', eddy_data, True)
-q = var_reading('specific_humidity', eddy_data, True)
+q = extreme_values_reading('specific_humidity', eddy_data)
 T_dew = var_reading('Tdew', eddy_data, True)
 wind_dir = var_reading('wind_dir', eddy_data, True)
 wind_speed = var_reading('wind_speed', eddy_data, True)
 u_star = var_reading('u*', eddy_data, True)
-VPD = var_reading('VPD', eddy_data, True)
+VPD = extreme_values_reading('VPD', eddy_data)
 L = var_reading('L', eddy_data, True)  # Monin-obukov length
 #%% ERA5 vars
 u_era5 = var_reading('u10', ds, True)
@@ -586,29 +598,29 @@ VPD_era5 = RH_to_VPD(RH_era5/100, Ta_era5-273.15)
 #%% Quality screening - biomet variables
 print('Doing quality screening on the variables')
 print('....................................')
-wrong_data_dates = (date_biomet.year==2014)*(date_biomet.month==7)*(date_biomet.day==25)*(date_biomet.hour>15)
-Ta_qc = quality_screening(Ta, -10, 32, wrong_data_dates, 0, 0)
+wrong_data_dates = (date_biomet.year==2016)*(date_biomet.month==9)*(date_biomet.day==15)*(date_biomet.hour>15)
+Ta_qc = quality_screening(Ta, -5, 32, 0, 0, 0)
 Pa_qc = quality_screening(Pa, 85000, 106000, 0, 0, 0)
 Td_qc = quality_screening(Td, -25, 27, 0, 0, 0)
 Tc_qc = quality_screening(Tc, -10, 32, 0, 0, 0)
-Rn_qc = quality_screening(Rn, -400, 1200, 0, 0, 0)
+Rn_qc = quality_screening(Rn, -200, 1200, 0, 0, 0)
 LWin_qc = quality_screening(LWin, -300, 10, 0, 0, 0)
 LWout_qc = quality_screening(LWout, -50, 50, 0, 0, 0)
 SWin_qc = quality_screening(SWin, 0, 1200, 0, 0, 0)
-SWout_qc = quality_screening(SWout, 0, 150, 0, 0, 0)
-wrong_data_dates = ((date_biomet.year==2020)*((date_biomet.month==2)+(date_biomet.month==3)+
-                                      (date_biomet.month==4)+
-                                      (date_biomet.month==5)))+(date_biomet.year>2020)
-PPFD_qc = quality_screening(PPFD, 0, 2500, wrong_data_dates, 0, 0)
+SWout_qc = quality_screening(SWout, 0, 200, 0, 0, 0)
+# wrong_data_dates = ((date_biomet.year==2016)*((date_biomet.month==2)+(date_biomet.month==3)+
+                                      # (date_biomet.month==4)+
+                                      # (date_biomet.month==5)))+(date_biomet.year>2020)
+PPFD_qc = quality_screening(PPFD, 0, 2500, 0, 0, 0)
 P_rain_qc = quality_screening(P_rain, 0, 75, 0, 0, 0)
 MWS_qc = quality_screening(MWS, 0, 20, 0, 0, 0)
-WD_qc = quality_screening(WD, 0, 360, 0, 0, 0)
+WD_qc = quality_screening(WD, -180, 180, 0, 0, 0)
 Ts_qc = quality_screening(Ts, -5, 30, 0, 0, 0)
 SWC_qc = quality_screening(SWC, 0.01, 1, 0, 0, 0)
 SHF_qc = quality_screening(SHF, -15, 15, 0, 0, 0)
 #%% QS - eddy data
 Tau_qc = quality_screening(Tau, -3.5, 2, 0, [u_var, v_var, w_var], qc_Tau)
-H_qc = quality_screening(H, -500, 850, 0, [w_var, ts_var], qc_H)
+H_qc = quality_screening(H, -200, 630, 0, [w_var, ts_var], qc_H)
 LE_qc = quality_screening(LE, -300, 650, 0, [h2o_var, w_var, ts_var, flowrate],
                           qc_LE)
 FCO2_qc = quality_screening(FCO2, -100, 400, 0, [co2_var, h2o_var, w_var, ts_var],
@@ -616,8 +628,8 @@ FCO2_qc = quality_screening(FCO2, -100, 400, 0, [co2_var, h2o_var, w_var, ts_var
 h2o_flux_qc = quality_screening(h2o_flux, -20, 20, 0, [h2o_var, flowrate],
                                 qc_h2o_flux)
 H_strg_qc = quality_screening(H_strg, -150, 150, 0, 0, 0)  # SH
-wrong_data_dates = (date.year==2015)*((date.month==7)+(date.month==6))
-LE_strg_qc = quality_screening(LE_strg, -170, 170, wrong_data_dates, 0, 0) #SLE
+# wrong_data_dates = (date.year==2015)*((date.month==7)+(date.month==6))
+LE_strg_qc = quality_screening(LE_strg, -170, 170, 0, 0, 0) #SLE
 co2_strg_qc = quality_screening(co2_strg, -40, 40, 0, 0, 0)
 h2o_strg_qc = quality_screening(h2o_strg, -5, 5, 0, 0, 0)
 co2_mix_ratio_qc = quality_screening(co2_mix_ratio, 150, 1200, 0, 0, 0)
@@ -628,16 +640,16 @@ air_pressure_qc = quality_screening(air_pressure, 85000, 106000, 0, 0, 0)
 ET_qc = quality_screening(ET, 0, 1, 0, [flowrate, h2o_var, w_var, ts_var],
                           qc_LE)
 q_qc = quality_screening(q, 0, 0.02, 0, 0, 0)
-wrong_data_dates = ((date.year==2015)*(date.month>5))
+# wrong_data_dates = ((date.year==2015)*(date.month>5))
 RH = dropped(RH, (date.year==2021)*(date.month>9), 50)
 RH = dropped(RH, (date.year==2022), 50)
-RH_qc = quality_screening(RH, 5, 100, wrong_data_dates, 0, 0)
-VPD = dropped(VPD, (date.year==2021)*(date.month>9), -750)
-VPD = dropped(VPD, (date.year==2022), -750)
-VPD_qc = quality_screening(VPD, 0, 5500, wrong_data_dates, 0, 0)
+RH_qc = quality_screening(RH, 5, 100, 0, 0, 0)
+# VPD = dropped(VPD, (date.year==2021)*(date.month>9), -750)
+# VPD = dropped(VPD, (date.year==2022), -750)
+VPD_qc = quality_screening(VPD, 0, 5500, 0, 0, 0)
 u_star_qc = quality_screening(u_star, 0, 8, 0, [u_var, v_var, w_var], 0)
 L_qc = quality_screening(L, -3000, 3000, 0, 0, 0)
-NEE_qc = FCO2_qc #+ co2_strg_qc  # Our forest NEE calculation might be biased since we lack of a column integrated carbox flux -> co2_Strg data wrong
+NEE_qc = FCO2_qc #+ co2_strg_qc  # Peatland NEE calculation have little to non storage term
 NEE_qc = quality_screening(NEE_qc, -35, 35, 0, [co2_var, h2o_var, w_var, ts_var],
                            qc_FCO2)
 #%% Non filled data - same size data
@@ -821,8 +833,6 @@ df_final = pd.DataFrame({'TIMESTAMP': date_era5, 'Ta': Ta_o, 'Ta_f': Ta_f,
                          'NEE_f': NEE_f, 'NEE_err': NEE_err,'VPD': VPD_o, 'vPD_f': VPD_f, 'ustar': ustar_o,
                          'GPP_DT': gpp_l, 'GPP_NT': gpp_r, 'ET': ET_o,
                          'ET_f': ET_f})
-df_final.to_csv(path+'LEVEL3_SDF_2013_2021.csv', index=False)
+df_final.to_csv(path+'LEVEL3_SDP_2013_2021.csv', index=False)
 print('Saving data to a csv')
 print('....................................')
-
-
