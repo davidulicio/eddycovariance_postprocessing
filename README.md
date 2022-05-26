@@ -1,11 +1,11 @@
-## eddycovariance_postprocessing
+# eddycovariance_postprocessing
 # Post Processing of eddy covariance data
 This repository summarizes the Post-Processing methodology used for the eddy covariance data measured at Alerce Costero National Park and Biological Station Senda Darwin, Chile.
 The aim of this methodology is to obtain filtered, screened and filled data from the flux towers.
 
-# The initial level of this data is high frequency raw data that is obtained at a 20 Hz frequency
+## The initial level of this data is high frequency raw data that is obtained at a 20 Hz frequency
 
-# The second step is the data processed in the software EddyPro in which the following corrections are applied:
+## The second step is the data processed in the software EddyPro in which the following corrections are applied:
 **Eddypro - General Operations**
 
 Fratini, G. and Matthias, M.: Towards a consistent eddy-covariance processing: an intercomparison of EddyPro and TK3, Atmospheric Measurement Techniques, 7(1), 2273–2281, 2014.
@@ -48,7 +48,7 @@ Horst, T. and Lenschow, D.: Attenuation of scalar fluxes measured with spatially
 
 
 
-# The last step in the data is this third level analysis which includes the following Workflow:
+## The last step in the data is this third level analysis which includes the following Workflow:
 
 **Quality Screening, biomet merge and gapfill**
 
