@@ -3,9 +3,9 @@
 This repository summarizes the Post-Processing methodology used for the eddy covariance data measured at Alerce Costero National Park and Biological Station Senda Darwin, Chile.
 The aim of this methodology is to obtain filtered, screened and filled data from the flux towers.
 
-## The initial level of this data is high frequency raw data that is obtained at a 10 Hz frequency
+## The initial level of this data is high frequency raw data that is obtained at a 10 Hz frequency (Level 1 data)
 
-## The second step is the data processed in the software EddyPro in which the following corrections are applied:
+## The first processing step is made in the software EddyPro in which the following corrections are applied (Level 2 data) 
 **Eddypro - General Operations**
 
 Fratini, G. and Matthias, M.: Towards a consistent eddy-covariance processing: an intercomparison of EddyPro and TK3, Atmospheric Measurement Techniques, 7(1), 2273–2281, 2014.
@@ -48,13 +48,13 @@ Horst, T. and Lenschow, D.: Attenuation of scalar fluxes measured with spatially
 
 
 
-## The last step in the data is this third level analysis which includes the following Workflow:
+## The last step in the data processing is the postprocessing which includes the following Workflow:
 
 **Quality Screening, biomet merge and gapfill**
 
 Isaac, Peter & Cleverly, Jamie & Mchugh, Ian & van Gorsel, Eva & Ewenz, Cacilia & Beringer, Jason. (2017). OzFlux data: Network integration from collection to curation. Biogeosciences. 14. 2903-2928. 10.5194/bg-14-2903-2017.
 
-**Energy balance Residual Correction (not implemented yet)**
+**Energy balance Residual Correction**
 
 Matthias Mauder, Matthias Cuntz, Clemens Drüe, Alexander Graf, Corinna Rebmann, Hans Peter Schmid, Marius Schmidt, Rainer Steinbrecher. A strategy for quality and uncertainty assessment of long-term eddy-covariance measurements, Agricultural and Forest Meteorology, Volume 169, 2013, Pages 122-135, ISSN 0168-1923, https://doi.org/10.1016/j.agrformet.2012.09.006.
 
