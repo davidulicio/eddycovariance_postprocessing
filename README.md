@@ -48,7 +48,7 @@ Horst, T. and Lenschow, D.: Attenuation of scalar fluxes measured with spatially
 
 
 
-## The last step in the data processing is the postprocessing which includes the following Workflow:
+## The last step in the data processing is the postprocessing which includes the following Workflow (Level 3 data)
 
 **Quality Screening, biomet merge and gapfill**
 
