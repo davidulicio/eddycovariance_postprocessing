@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Eddy Covariance Post-Processing Script - Forest SD
+Eddy Covariance Post-Processing Script - Forest AC
 @author: David Trejo
 V1.0 (2022-03-23)
 """
@@ -22,12 +22,12 @@ print('                                        ')
 "ERA5 data"
 path = 'D:/ERA5_chiloe/'
 ds = pd.read_csv(path+'era5_data.csv')
-# units_era5 = pd.read_csv(path+'metadata.csv')['units']
-# vars_era5 = pd.read_csv(path+'metadata.csv')['long_name']
+units_era5 = pd.read_csv(path+'metadata.csv')['units']
+vars_era5 = pd.read_csv(path+'metadata.csv')['long_name']
 date_era5 = pd.DatetimeIndex(ds['time']) - pd.Timedelta(hours=3)  # UTC to local time
 "Eddy data"
-path = 'D:/Dropbox/David/LECS/eddy/Bosque/Salida eddypro/2023/'
-filename = 'eddypro_forest_full_output_2023-01-05T110754_adv.csv'
+path = 'C:/Users/PC5 LECS/Desktop/Tovi data/Inputs/SDF/'
+filename = 'eddypro_forest_full_output_2022-09-21T080342_adv.csv'
 eddy_data = pd.read_csv(path+filename, skiprows=[0], low_memory=(False))
 eddy_units = eddy_data.iloc[0]; eddy_data = eddy_data[1:]
 bool_repeated = eddy_data.duplicated(keep='first')
@@ -35,16 +35,17 @@ eddy_data = eddy_data[~bool_repeated]  # Erase repeated data
 date = pd.DatetimeIndex(eddy_data['date'].astype(str) + ' ' +
                         eddy_data['time'].astype(str))
 "Biomet data"
-path = 'D:/Dropbox/David/LECS/eddy/Bosque/Salida eddypro/2023/'
-filename = 'eddypro_forest_biomet_2023-01-04T145557_adv.csv'
+path = 'D:/Dropbox/David/LECS/eddy/Bosque/Biomet from Raw (TOA5)/'
+filename = 'forest_biomet_201401_202208.csv'
 biomet_data = pd.read_csv(path+filename, low_memory=(False))
 biomet_units = biomet_data.iloc[0]; biomet_data = biomet_data[1:]
 bool_repeated = biomet_data.duplicated(keep='first')
 biomet_data = biomet_data[~bool_repeated] # Erase repeated data
-date_biomet = pd.DatetimeIndex(biomet_data['date'].astype(str)+' '+
-               biomet_data['time'].astype(str))
-
-
+date_biomet = pd.DatetimeIndex(biomet_data['TIMESTAMP_1'].astype(str)+'/'+
+               biomet_data['TIMESTAMP_2'].astype(str) + '/' +
+               biomet_data['TIMESTAMP_3'].astype(str) + ' ' +
+               biomet_data['TIMESTAMP_4'].astype(str) + ':' +
+               biomet_data['TIMESTAMP_5'].astype(str))
 #%%
 umols_to_30mingC = (12 * 10**(-6)) * 1800  #micromol/m2s a gramos de carbono/m2 30min
 co2_flux = np.float64(eddy_data['co2_flux']) * umols_to_30mingC
@@ -60,7 +61,7 @@ nboot = 100  # N° of boot straps for estimating the confidence interval of u* t
 sw_dev = 50  # Max deviation of SW_IN
 ta_dev = 2.5  # Max deviation of TA
 vpd_dev = 5  # Max deviation of VPD
-longgap = 30  # Avoid extrapolation in gaps longer than longgap days
+longgap = 35  # Avoid extrapolation in gaps longer than longgap days
 
 #%% Cut data to fit the shortest period
 date_i = date[0]; date_f = date[len(date)-2]
@@ -68,7 +69,6 @@ ds = ds[np.where(date_i==date_era5)[0][0]: np.where(date_f==date_era5)[0][0]+1]
 date_era5 = date_era5[np.where(date_i==date_era5)[0][0]: np.where(date_f==date_era5)[0][0]+1]
 biomet_data = biomet_data[np.where(date_i==date_biomet)[0][0]: np.where(date_f==date_biomet)[0][0]+1]
 date_biomet = date_biomet[np.where(date_i==date_biomet)[0][0]: np.where(date_f==date_biomet)[0][0]+1]
-
 #%% functions
 def latent_heat_vaporization(TA):
     """latent_heat_vaporization(TA)
@@ -193,7 +193,6 @@ def quality_screening(variable, min_val, max_val, date_exclusions,
     variable = np.copy(variable)
     variable[variable>max_val] = np.nan; variable[variable<min_val] = np.nan
     variable[date_exclusions] = np.nan
-    variable[~np.isfinite(variable)] = np.nan
     try:
         float(dependencies)
         pass
@@ -219,6 +218,7 @@ def quality_screening(variable, min_val, max_val, date_exclusions,
 
 def biomet_gap_fill(variable, era5_var, date_var, date_era5, method):
     """
+    
 
     Parameters
     ----------
@@ -237,7 +237,6 @@ def biomet_gap_fill(variable, era5_var, date_var, date_era5, method):
     """
     # valid_intersection = np.where(date_era5.intersection(date_var)) * ~(np.isnan(variable))
     variable = np.copy(variable)
-    variable[~np.isfinite(variable)] = np.nan
     valid_intersection = date_era5.intersection(date_var)
     missing = date_era5.difference(date_var)
     invalid_data = date_var[np.isnan(variable)]
@@ -489,79 +488,6 @@ def energy_balance_ratio(day_mask, H, LE, Rn, G, J, date):
     EBR = np.sum(daily_H + daily_LE) / np.sum(daily_Rn + daily_G + daily_J)
     return EBR
 
-def ml_gapfilling(df1, df2, method, test_size):
-    """
-    Machine learning techniques to gapfilling timeseries using one or multiple 
-    features as input. 
-
-    Parameters
-    ----------
-    df1 : DataFrame
-        DataFrame with its columns as the features for training and prediction.
-        The index is the timestamp of the timeseries.
-    df2 : DataFrame, Series
-        Values of the variable to be predicted. Index must be the timestamp of 
-        the timeseries.
-    method : string
-        String of the method to apply. The methods available are linear
-        regression, 
-
-    Returns
-    -------
-    prediction : Series.
-        Series of the the predicted values using the method selected and given
-        inputs.
-    
-    """
-    from sklearn import linear_model, svm, neighbors
-    from sklearn.model_selection import train_test_split
-    from sklearn.pipeline import make_pipeline
-    from sklearn.preprocessing import StandardScaler
-    from sklearn import tree
-    from sklearn.ensemble import BaggingRegressor
-    X = df1.copy()
-    date = df1.index.intersection(df2.index)
-    df1 = df1.loc[date]; df2 = df2.loc[date]
-    valid_data = ~((df1.isna().sum(axis=1)>0) + (df2.isna()))
-    df1 = df1[valid_data]; df2 = df2[valid_data]
-    X_train, X_test, y_train, y_test = train_test_split(df1, df2, test_size=0.2, random_state=42)
-    if method == 'linear':
-        reg = linear_model.LinearRegression()
-    elif method == 'svm':
-        reg = svm.SVR()
-    elif method == 'kneighbors':
-        reg = neighbors.KNeighborsRegressor(n_neighbors=5, weights='uniform')
-    elif method == 'scalar':
-        reg = make_pipeline(StandardScaler(),linear_model.SGDRegressor(max_iter=1000, tol=1e-3))
-    elif method == 'tree':
-        reg = tree.DecisionTreeRegressor()
-    elif method == 'bagging':
-        reg = BaggingRegressor(random_state=42)
-    reg.fit(X_train, y_train)
-    score_train = str(round(reg.score(X_train, y_train), 2))
-    score_test = str(round(reg.score(X_test, y_test), 2))
-
-    print("""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%""")
-    print("The gapfilling method selected is: "+ method)
-    print('The Test size is: '+str(test_size) + ". The Train size is: " +
-          str(1-test_size))
-    print("The Train Sample Score for the selected method is: "+ score_train)
-    print("The Test Sample Score for the selected method is: "+ score_test)
-    prediction = reg.predict(X)
-    prediction = pd.Series(prediction, index=X.index)
-    df3 = df2.copy()
-    df3 = df3.resample('30min').mean()
-    df3[df3.isna()] = prediction[df3.isna().index]
-    # Figure
-    fig, axs = plt.subplots(3, 1, figsize=(8,8), sharex=True)
-    axs[0].plot(df2)
-    axs[0].set_title('Raw Data')
-    axs[1].plot(prediction)
-    axs[1].set_title('Model')
-    axs[2].plot(df3)
-    axs[2].set_title('Filled Data')
-    
-    return df3
 
 def energy_balance_residual_correction(EBR, F, day_mask):
     """
@@ -631,35 +557,7 @@ def footprint(FETCHx, WD):
                 pass
     return erase
 
-def air_density(p, T):
-    """
-    Calculates air density using the ideal gas law
-
-    Parameters
-    ----------
-    p : array float
-        Absolute pressure [Pa].
-    T : array float
-        Absolute temperature [°C].
-
-    Returns
-    -------
-    rho: air density [kg/m3].
-
-    """
-    T = T + 273.15  # °C to Kelvin
-    R_specific = 287.058  # [J/Kg K]
-    p = p
-    rho = p / (R_specific * T)
-    return rho
-
-
-def obukhov_length(T, ustar, H, rho):
-    cp = 1012  # Specific heat of air [J kg−1 K−1].
-    kappa = 0.41  # Von Karman constant 
-    g = 9.81  # [m/s2]
-    L = -(rho* cp * ustar * T) / (kappa * g * H)
-    return L
+    
 #%% Reading necessary variables - Dependencies
 print('Reading necessary variables')
 print('....................................')
@@ -691,33 +589,12 @@ PPFD = var_reading('PPFD', biomet_data, True)
 P_rain = var_reading('P_rain', biomet_data, True)
 MWS = var_reading('MWS', biomet_data, True)
 WD = var_reading('WD', biomet_data, True)
-Ts1 = var_reading('Ts_1_1_1', biomet_data, True) - 273.15
-Ts2 = var_reading('Ts_2_1_1', biomet_data, True) - 273.15
-Ts3 = var_reading('Ts_3_1_1', biomet_data, True) - 273.15
-SWC1 = var_reading('SWC_1_1_1', biomet_data, True)
-SWC2 = var_reading('SWC_2_1_1', biomet_data, True)
-SWC3 = var_reading('SWC_3_1_1', biomet_data, True)
-SHF1 = var_reading('SHF_1_1_1', biomet_data, True)
-SHF2 = var_reading('SHF_2_1_1', biomet_data, True)
-SHF3 = var_reading('SHF_3_1_1', biomet_data, True)
-#
-PATH = 'D:/Dropbox/David/LECS/eddy/Bosque/Biomet from Raw (TOA5)/'
-FILENAME = 'forest_extended_biomet_201401_202301.csv'
-biomext = pd.read_csv(PATH+FILENAME)
-date_biometext = pd.DatetimeIndex(biomext['TIMESTAMP_1'].astype(str)+'/'+
-                biomext['TIMESTAMP_2'].astype(str) + '/' +
-                biomext['TIMESTAMP_3'].astype(str) + ' ' +
-                biomext['TIMESTAMP_4'].astype(str) + ':' +
-                biomext['TIMESTAMP_5'].astype(str))
-WTD = var_reading('WTD', biomext, True)
-WTD = pd.Series(WTD, index=date_biometext).resample('30min').mean()
-NR01TK = var_reading('NR01TK', biomext, True)
-NR01TK = pd.Series(NR01TK, index=date_biometext).resample('30min').mean()
-NR01TK[NR01TK>310.15] = np.nan
-del biomext, date_biometext
-WTD = WTD[1:np.where(WTD.index==date[len(date)-1])[0][0]]
-NR01TK = NR01TK[1:np.where(NR01TK.index==date[len(date)-1])[0][0]]
-
+Ts = var_reading('Ts', biomet_data, True)
+SWC = var_reading('SWC', biomet_data, True)
+SHF = var_reading('SHF', biomet_data, True)
+WTD = var_reading('WTD', biomet_data, True)
+NR01TK = var_reading('NR01TK', biomet_data, True)
+NR01TK[NR01TK>310.15] = np.nan 
 #%% Long wave radiation correction
 delt = 5.67 * 10**(-8)
 plt.plot(date_biomet, NR01TK-273.15)
@@ -756,8 +633,8 @@ u_star = var_reading('u*', eddy_data, True)
 VPD = var_reading('VPD', eddy_data, True)
 
 #%% Vars to Ameriflux
-# MO_LENGTH = var_reading('L', eddy_data, True)  # Monin-obukov length
-# L = var_reading('L', eddy_data, True)  # Monin-obukov length
+MO_LENGTH = var_reading('L', eddy_data, True)  # Monin-obukov length
+L = var_reading('L', eddy_data, True)  # Monin-obukov length
 FETCH_70 = var_reading('x_70%', eddy_data, True)
 FETCH_90 = var_reading('x_90%', eddy_data, True)
 MODEL = var_reading('model', eddy_data, True)
@@ -776,7 +653,7 @@ VPD_era5 = RH_to_VPD(RH_era5/100, Ta_era5-273.15)
 print('Doing quality screening on the variables')
 print('....................................')
 wrong_data_dates = (date_biomet.year==2014)*(date_biomet.month==7)*(date_biomet.day==25)*(date_biomet.hour>15)
-Ta_qc = quality_screening(Ta-273.15, -10, 32, wrong_data_dates, 0, 0)
+Ta_qc = quality_screening(Ta, -10, 32, wrong_data_dates, 0, 0)
 Pa_qc = quality_screening(Pa, 96000, 103000, 0, 0, 0)
 Td_qc = quality_screening(Td, -25, 27, 0, 0, 0)
 Tc_qc = quality_screening(Tc, -10, 32, 0, 0, 0)
@@ -794,16 +671,10 @@ wrong_data_dates = wrong_data_dates | ((pd.Timestamp('2018-01-01 00:00:00') < da
 wrong_data_dates = wrong_data_dates + (pd.Timestamp('2020-07-18 00:00:00') < date_biomet)
 P_rain_qc = quality_screening(P_rain, 0, 50, wrong_data_dates, 0, 0)
 MWS_qc = quality_screening(MWS, 0, 20, 0, 0, 0)
-WD_qc = quality_screening(WD, 0, 360, 0, 0, 0)
-Ts1_qc = quality_screening(Ts1, 2, 30, 0, 0, 0)
-SWC1_qc = quality_screening(SWC1, 0.01, 1, 0, 0, 0)
-SHF1_qc = quality_screening(SHF1, -15, 15, 0, 0, 0)
-Ts2_qc = quality_screening(Ts2, 2, 30, 0, 0, 0)
-SWC2_qc = quality_screening(SWC2, 0.01, 1, 0, 0, 0)
-SHF2_qc = quality_screening(SHF2, -15, 15, 0, 0, 0)
-Ts3_qc = quality_screening(Ts3, 2, 30, 0, 0, 0)
-SWC3_qc = quality_screening(SWC3, 0.01, 1, 0, 0, 0)
-SHF3_qc = quality_screening(SHF3, -15, 15, 0, 0, 0)
+WD_qc = quality_screening(WD, -181, 181, 0, 0, 0)
+Ts_qc = quality_screening(Ts, -5, 30, 0, 0, 0)
+SWC_qc = quality_screening(SWC, 0.01, 1, 0, 0, 0)
+SHF_qc = quality_screening(SHF, -15, 15, 0, 0, 0)
 wrong_data_dates = (date_biomet.year==2021)*(date_biomet.month>7)
 NR01TK_qc = quality_screening(NR01TK, 263.15, 40+273.15, wrong_data_dates, 0, 0)
 wrong_data_dates = (date_biomet.year==2021)*(date_biomet.month>4)
@@ -814,15 +685,14 @@ Tau_qc = quality_screening(Tau, -3.5, 2, 0, [u_var, v_var, w_var], qc_Tau)
 H_qc = quality_screening(H, -500, 850, 0, [w_var, ts_var], qc_H)
 LE_qc = quality_screening(LE, -300, 650, 0, [h2o_var, w_var, ts_var, flowrate],
                           qc_LE)
-FCO2_qc = quality_screening(FCO2, -30, 30, 0, [co2_var, h2o_var, w_var, ts_var],
+FCO2_qc = quality_screening(FCO2, -100, 400, 0, [co2_var, h2o_var, w_var, ts_var],
                            qc_FCO2)
 h2o_flux_qc = quality_screening(h2o_flux, -20, 20, 0, [h2o_var, flowrate],
                                 qc_h2o_flux)
 H_strg_qc = quality_screening(H_strg, -150, 150, 0, 0, 0)  # SH
 wrong_data_dates = (date.year==2015)*((date.month==7)+(date.month==6))
 LE_strg_qc = quality_screening(LE_strg, -170, 170, wrong_data_dates, 0, 0) #SLE
-co2_strg_qc = quality_screening(co2_strg, -20, 15, 0, [co2_var, h2o_var, w_var, ts_var],
-                                qc_FCO2)
+co2_strg_qc = quality_screening(co2_strg, -40, 40, 0, 0, 0)
 h2o_strg_qc = quality_screening(h2o_strg, -5, 5, 0, 0, 0)
 co2_mix_ratio_qc = quality_screening(co2_mix_ratio, 150, 1200, 0, 0, 0)
 h2o_mix_ratio_qc = quality_screening(h2o_mix_ratio, 0, 50, 0, 0, 0)
@@ -840,14 +710,12 @@ VPD = dropped(VPD, (date.year==2021)*(date.month>9), -750)
 VPD = dropped(VPD, (date.year==2022), -750)
 VPD_qc = quality_screening(VPD, 0, 5500, wrong_data_dates, 0, 0)
 u_star_qc = quality_screening(u_star, 0, 8, 0, [u_var, v_var, w_var], 0)
-# L_qc = quality_screening(L, -3000, 3000, 0, 0, 0)
-NEE_qc = FCO2_qc #+ co2_strg_qc  
+L_qc = quality_screening(L, -3000, 3000, 0, 0, 0)
+NEE_qc = FCO2_qc #+ co2_strg_qc  # Our forest NEE calculation might be biased since we lack of a column integrated carbox flux -> co2_Strg data wrong
+NEE_qc = quality_screening(NEE_qc, -35, 35, 0, [co2_var, h2o_var, w_var, ts_var],
+                           qc_FCO2)
 sonic_temperature_qc = quality_screening(sonic_temperature-273.15, -5, 32, 0, 0, 0)
 wind_speed_qc = quality_screening(wind_speed, 0, np.nanpercentile(wind_speed, 99.9), 0, 0, 0)
-# MO_LENGTH_QC = quality_screening(MO_LENGTH, np.nanpercentile(MO_LENGTH, 0.01),
-                             # np.nanpercentile(MO_LENGTH, 0.99),  0, 0, 0)
-v_var = var_reading('v_var', eddy_data, True)
-# v_var_QC = quality_screening(v_var, 0, np.nanpercentile(v_var, 0.999), 0, 0, 0)
 #%%
 # plt.figure()
 # plt.plot(date, air_temperature_qc-273.15, alpha=0.5)
@@ -867,25 +735,18 @@ PPFD_o = biomet_gap_fill(PPFD_qc, 0, date_biomet, date_era5, 'none')
 P_rain_o = biomet_gap_fill(P_rain_qc, 0, date_biomet, date_era5, 'none')
 MWS_o = biomet_gap_fill(MWS_qc, 0, date_biomet, date_era5, 'none')
 WD_o = biomet_gap_fill(WD_qc, 0, date_biomet, date_era5, 'none')
-Ts1_o = biomet_gap_fill(Ts1_qc, 0, date_biomet, date_era5, 'none')
-SWC1_o = biomet_gap_fill(SWC1_qc, 0, date_biomet, date_era5, 'none')
-SHF1_o = biomet_gap_fill(SHF1_qc, 0, date_biomet, date_era5, 'none')
-Ts2_o = biomet_gap_fill(Ts2_qc, 0, date_biomet, date_era5, 'none')
-SWC2_o = biomet_gap_fill(SWC2_qc, 0, date_biomet, date_era5, 'none')
-SHF2_o = biomet_gap_fill(SHF2_qc, 0, date_biomet, date_era5, 'none')
-Ts3_o = biomet_gap_fill(Ts3_qc, 0, date_biomet, date_era5, 'none')
-SWC3_o = biomet_gap_fill(SWC3_qc, 0, date_biomet, date_era5, 'none')
-SHF3_o = biomet_gap_fill(SHF3_qc, 0, date_biomet, date_era5, 'none')
+Ts_o = biomet_gap_fill(Ts_qc, 0, date_biomet, date_era5, 'none')
+SWC_o = biomet_gap_fill(SWC_qc, 0, date_biomet, date_era5, 'none')
+SHF_o = biomet_gap_fill(SHF_qc, 0, date_biomet, date_era5, 'none')
 # Quality controlled data (Simple screening) - eddy data
 Tau_o = biomet_gap_fill(Tau_qc, 0, date, date_era5, 'none')
 H_o = biomet_gap_fill(H_qc, 0, date, date_era5, 'none')
 LE_o = biomet_gap_fill(LE_qc, 0, date, date_era5, 'none')
-FCO2_o = biomet_gap_fill(FCO2_qc, 0, date, date_era5, 'none')
-co2_strg_o = biomet_gap_fill(co2_strg_qc, 0, date, date_era5, 'none')
-NEE_o = biomet_gap_fill(NEE_qc, 0, date, date_era5, 'none') + co2_strg_o
+NEE_o = biomet_gap_fill(NEE_qc, 0, date, date_era5, 'none')
 h2o_flux_o = biomet_gap_fill(h2o_flux_qc, 0, date, date_era5, 'none')
 H_strg_o = biomet_gap_fill(H_strg_qc, 0, date, date_era5, 'none')
 LE_strg_o = biomet_gap_fill(LE_strg_qc, 0, date, date_era5, 'none')
+co2_strg_o = biomet_gap_fill(co2_strg_qc, 0, date, date_era5, 'none')
 h2o_strg_o = biomet_gap_fill(h2o_strg_qc, 0, date, date_era5, 'none')
 co2_mix_ratio_o = biomet_gap_fill(co2_mix_ratio_qc, 0, date, date_era5, 'none')
 h2o_mix_ratio_o = biomet_gap_fill(h2o_mix_ratio_qc, 0, date, date_era5, 'none')
@@ -896,7 +757,7 @@ q_o = biomet_gap_fill(q_qc, 0, date, date_era5, 'none')
 RH_o = biomet_gap_fill(RH_qc, 0, date, date_era5, 'none')
 VPD_o = biomet_gap_fill(VPD_qc, 0, date, date_era5, 'none')
 ustar_o = biomet_gap_fill(u_star_qc, 0, date, date_era5, 'none')
-# L_o = biomet_gap_fill(L_qc, 0, date, date_era5, 'none')
+L_o = biomet_gap_fill(L_qc, 0, date, date_era5, 'none')
 WTD_o = biomet_gap_fill(WTD_qc, 0, date_biomet, date_era5, 'none')
 NR01TK_o = biomet_gap_fill(NR01TK_qc, 0, date_biomet, date_era5, 'none')
 sonic_temperature_o = biomet_gap_fill(sonic_temperature_qc, 0, date, date_era5, 'none')
@@ -904,17 +765,14 @@ wind_speed_o = biomet_gap_fill(wind_speed_qc, 0, date, date_era5, 'none')
 FETCH_70 = biomet_gap_fill(FETCH_70, 0, date, date_era5, 'none')
 FETCH_MAX = biomet_gap_fill(FETCH_MAX, 0, date, date_era5, 'none')
 FETCH_90 = biomet_gap_fill(FETCH_90, 0, date, date_era5, 'none')
-# MO_LENGTH_o = biomet_gap_fill(MO_LENGTH_QC, 0, date, date_era5, 'none')
-v_var_o = biomet_gap_fill(v_var, 0, date, date_era5, 'none')
-sigma_o = np.sqrt(v_var_o)
 #%%
-# G_F = biomet_gap_fill(NEE_qc, ds['u10'], date, date_era5, 'none')
+# NEE_f = biomet_gap_fill(NEE_qc, ds['u10'], date, date_era5, 'none')
 # ustar_f = biomet_gap_fill(u_star_qc, ds['u10'], date, date_era5, 'linear fill')
 
 #%% Wind Direction from [-180, 180] to [0, 360]
 # There is a wind direction correction applied before eddypro to correct azimuth and magnetic declination
 WD2 = WD_o.copy()
-# WD2[WD2<0] = WD2[WD2<0] + 360
+WD2[WD2<0] = WD2[WD2<0] + 360
 from windrose import WindroseAxes
 plt.figure()
 ax = WindroseAxes.from_ax()
@@ -939,17 +797,13 @@ LWout_f = biomet_gap_fill(LWout_qc, ds['msnlwrf']-ds['msdwlwrf'], date_biomet,
 SWin_f = biomet_gap_fill(SWin_qc, ds['msdwswrf'], date_biomet, date_era5, 'replace') #downward rad
 SWout_f = biomet_gap_fill(SWout_qc, -ds['msnswrf']+ds['msdwswrf'], date_biomet, date_era5, 'linear fill') #downward rad
 H_f = biomet_gap_fill(H_qc, ds['msshf'], date, date_era5, 'linear fill')
-SWC1_f = biomet_gap_fill(SWC1_qc, ds['swvl1'], date_biomet, date_era5, 'linear fill')
-Ts1_f = biomet_gap_fill(Ts1_qc, ds['stl1'], date_biomet, date_era5, 'linear fill')
-SWC2_f = biomet_gap_fill(SWC2_qc, ds['swvl1'], date_biomet, date_era5, 'linear fill')
-Ts2_f = biomet_gap_fill(Ts2_qc, ds['stl1'], date_biomet, date_era5, 'linear fill')
-SWC3_f = biomet_gap_fill(SWC3_qc, ds['swvl1'], date_biomet, date_era5, 'linear fill')
-Ts3_f = biomet_gap_fill(Ts3_qc, ds['stl1'], date_biomet, date_era5, 'linear fill')
+SWC_f = biomet_gap_fill(SWC_qc, ds['swvl1'], date_biomet, date_era5, 'linear fill')
 # SHF_f = biomet_gap_fill(SHF, ds['msshf']+ds['mslhf'], date_biomet, date_era5, 'linear fill')
-RH_f = biomet_gap_fill(RH_qc, VPD_era5, date, date_era5, 'linear fill')  # recalcular usando rh de era5 orig
+RH_f = biomet_gap_fill(RH_qc, ds['RH'], date, date_era5, 'linear fill')  # recalcular usando rh de era5 orig
 LE_f = biomet_gap_fill(LE_qc, pd.Series(Convert(ds['mslhf'])), date, date_era5,'linear fill')
 Pa_f = biomet_gap_fill(Pa_qc, ds['sp'], date_biomet, date_era5, 'linear fill')
 Rn_f = biomet_gap_fill(Rn_qc, ds['msnlwrf']+ds['msnswrf'], date_biomet, date_era5, 'linear fill')
+Ts_f = biomet_gap_fill(Ts_qc, ds['stl1'], date_biomet, date_era5, 'linear fill')
 VPD_f = biomet_gap_fill(VPD_qc, VPD_era5, date, date_era5, 'linear fill')
 MWS_f = biomet_gap_fill(MWS_qc, np.sqrt(ds['u10']**(2) + ds['v10']**(2)), date_biomet, date_era5, 'replace')
 wind_dir = biomet_gap_fill(wind_dir, wd_era5, date, date_era5, 'replace')
@@ -978,29 +832,28 @@ NETRAD_f =  LWin_f - LWout_f + SWin_f - SWout_f
 print('u* filtering 100 times, to asses the uncertainty of u* threshold - could take some time')
 print('....................................')
 df = pd.DataFrame({'NEE': NEE_o, 'USTAR':ustar_o, 'TA':Ta_f}, index=date_era5)
-mask = df.index.year<2023
+mask = df.index.year<2022
 df = df[mask]  # full years requierement
 dff = df.copy(deep=True)  # Flag
 dff[:] = 0
 df[df.isna()] = undef; dff[df.isna()] = 2;
-isday = SWin_f > 10; isday = isday[SWin_f.index.year<2023]  # full years requirement
+isday = SWin_f > 10; isday = isday[SWin_f.index.year<2022]  # full years requirement
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", category=RuntimeWarning)
     ustars, flag = hf.ustarfilter(df, flag=dff, isday=isday, undef=undef,
                                   ustarmin=ustarmin, nboot=nboot, nustarclasses=20,
                                   ntaclasses=100, plot=True)
 # Cleaning data flagged as bad quality determined by the u* detection tool
-# nee_us = np.copy(np.float64(df['NEE_o']))
-# nee_us[nee_us==undef] = np.nan
-NEE_o[NEE_o.index.year!=2023][flag==2] = np.nan
-# NEE_o = pd.Series(NEE_o, index= df.index)
+nee_us = np.copy(np.float64(df['NEE']))
+nee_us[nee_us==undef] = np.nan
+nee_us[flag==2] = np.nan
+nee_us = pd.Series(nee_us, index= df.index)
 
 #%% Configurable Gapfilling from hesseflux ICOS method
 print('Configurable Gap-filling')
 print('....................................')
 df = pd.DataFrame({'H': H_f, 'LE': LE_f, 'NEE': NEE_o, 'CO2_strg': co2_strg_o,
-                   'ustar': ustar_o, 'SW_IN': SWin_f, 'SHF1': SHF1_o,
-                   'SHF2': SHF2_o,'SHF3': SHF3_o,
+                   'ustar': ustar_o, 'SW_IN': SWin_f, 'SHF': SHF_o,
                    'TA':Ta_f, 'VPD':VPD_f}, index=date_era5)
 dff = df.copy(deep=True)  # Flag
 dff[:] = 0
@@ -1021,37 +874,15 @@ dff = pd.concat([dff, dff_f], axis=1)
 NEE_f = var_reading('f_NEE', df_f, True)
 H_f = var_reading('f_H', df_f, True)
 LE_f = var_reading('f_LE', df_f, True)
-SHF1_f = pd.Series(var_reading('f_SHF1', df_f, True), index=SHF1_o.index)
-SHF2_f = pd.Series(var_reading('f_SHF2', df_f, True), index=SHF2_o.index)
-SHF3_f = pd.Series(var_reading('f_SHF3', df_f, True), index=SHF3_o.index)
-ustar_f = pd.Series(var_reading('f_ustar', df_f, True), index=ustar_o.index)
+SHF_f = var_reading('f_SHF', df_f, True)
+ustar_f = var_reading('f_ustar', df_f, True)
 CO2_strg_f = var_reading('f_CO2_strg', df_f, True)
-# plt.plot(date_era5, NEE_f)
-SHF = pd.concat([SHF1_f, SHF2_f, SHF3_f], axis=1).mean(axis=1)
-SWC = pd.concat([SWC1_f, SWC2_f, SWC3_f], axis=1).mean(axis=1)
-TS = pd.concat([Ts1_f, Ts2_f, Ts3_f], axis=1).mean(axis=1)
-H_f = pd.Series(H_f, index=H_o.index)
-#%% ML filling
-X = pd.concat([SWin_f, MWS_f, LWout_f, TS, Rn_f, Ta_f, H_f], axis=1)
-nee_f2 = pd.Series(NEE_f, index=NEE_o.index).copy()
-nee_pred = ml_gapfilling(X, NEE_o, 'bagging', 0.2)
-nee_f2[nee_f2.isna()] = nee_pred[nee_f2.isna()]
-fco2_pred = ml_gapfilling(X, FCO2_o, 'bagging', 0.2)
-X = pd.concat([SWin_f, MWS_f, LWout_f, TS, Rn_f, Ta_f, SWC, RH_f, Pa_f], axis=1)
-et_f2 = ET_o.copy()
-et_pred = ml_gapfilling(X, ET_o, 'bagging', 0.2)
-et_f2[et_f2.isna()] = et_pred[et_f2.isna()]
-X = pd.concat([SWin_f, MWS_f, LWout_f, TS, Rn_f, Ta_f, SWC, RH_f, Pa_f], axis=1)
-ustar_f2 = ustar_f.copy()
-ustar_pred = ml_gapfilling(X, ustar_f2, 'bagging', 0.2)
-ustar_f2[ustar_f2.isna()] = ustar_pred[ustar_f2.isna()] 
-print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-
+plt.plot(date_era5, NEE_f)
 #%% Partitioning
 print('CO2 flux partitioning - Reichtein and Lasslop')
 print('....................................')
 # DataFrame
-df = pd.DataFrame({'NEE': nee_f2, 'SW_IN':SWin_f, 'TA':Ta_f, 'VPD':VPD_f})
+df = pd.DataFrame({'NEE': NEE_f, 'SW_IN':SWin_f, 'TA':Ta_f, 'VPD':VPD_f})
 df[df.isna()] = undef
 # Flag
 dff = df.copy(deep=True).astype(int)
@@ -1098,45 +929,35 @@ for cc in range(len(colin)):
     dff[colout[cc]] = dff[colin[cc]]
 NEE_err = df_err['f_NEE'].iloc[:, 1]
 #%% ET filling
-ET_f3 = LE_to_ET(LE_f, Ta_f) * 1800  # s -> 30 min
+ET_f2 = LE_to_ET(LE_f, Ta_f) * 1800  # s -> 30 min
 ET_f = ET_o.copy()
-ET_f[ET_o.isna()] = ET_f3[ET_o.isna()]
+ET_f[ET_o.isna()] = ET_f2[ET_o.isna()]
 ET_f[ET_f < 0] = 0
-# plt.plot(ET_f)
-#%% Monin-Obukhov Length
-rho = air_density(Pa_f, Ta_f)
-MO_LENGTH = obukhov_length(Ta_f, ustar_f, H_f, rho)
-MO_LENGTH[(ustar_f<0.1)&(np.isfinite(ustar_f))] = np.nan
+plt.plot(ET_f)
+
 #%% Data saving
-df_final = pd.DataFrame({'TIMESTAMP': date_era5, 'TA': Ta_o, 'TA_F': Ta_f,
-                         'T_SONIC': sonic_temperature_o, 'CO2_mixing_ratio':co2_mix_ratio_o,
-                         'H2O_mixing_ratio': h2o_mix_ratio_o, 'MO_LENGTH': MO_LENGTH,
-                         'SC':co2_strg_o, 'SC_F': CO2_strg_f, 
-                         'FH2O': h2o_flux_o, 'FC': FCO2_o, 'FC_F2': fco2_pred,
-                         'PA': Pa_o, 'PA_F':Pa_f, 'RH': RH_o, 'RH_F': RH_f,
-                         'TD': Td_o, 'T_CANOPY': Tc_o, 'NETRAD': NETRAD_o, 'NETRAD_F': NETRAD_f,
-                         'LW_IN': LWin_o, 'LW_IN_F': LWin_f, 'LW_OUT': LWout_o,
-                         'LW_OUT_F': LWout_f,'SW_IN': SWin_o, 'SW_IN_F': SWin_f,
-                         'SW_OUT': SWout_o, 'SW_OUT_F': SWout_f, 'PPFD': PPFD_o,
-                         'P_RAIN': P_rain_o, 'WS':wind_speed_o, 'WS_F': wind_speed_f,
-                         'WS_MAX': MWS_o, 'WS_MAX_F':MWS_f, 'V_SIGMA':sigma_o,
-                         'WD': WD2, 'TS_1_1_1': Ts1_o, 'TS_2_1_1': Ts2_o, 'TS_3_1_1': Ts3_o,
-                         'TS_F_1_1_1': Ts1_f,'TS_F_2_1_1': Ts2_f,'TS_F_3_1_1': Ts3_f,
-                         'SWC_1_1_1': SWC1_o, 'SWC_2_1_1': SWC2_o, 'SWC_3_1_1': SWC3_o,
-                         'SWC_F_1_1_1': SWC1_f, 'SWC_F_2_1_1': SWC2_f,'SWC_F_3_1_1': SWC3_f, 
-                         'WTD': WTD_o, 'G_1_1_1': SHF1_o, 'G_2_1_1': SHF2_o, 'G_3_1_1': SHF3_o,
-                         'G_F_1_1_1': SHF1_f, 'G_F_2_1_1': SHF2_f, 'G_F_3_1_1': SHF3_f,
-                         'LE': LE_o, 'LE_F': LE_f, 'H': H_o,
-                         'H_F': H_f, 'NEE': NEE_o, 'NEE_F': NEE_f, 'NEE_F2':nee_f2,
-                         'NEE_err': NEE_err,'VPD': VPD_o, 'VPD_F': VPD_f,
-                         'USTAR': ustar_o,  'USTAR_F': ustar_f, 'USTAR_F2':ustar_f2,
-                         'GPP_DT': gpp_l,'GPP_NT': gpp_r, 'ET': ET_o,
-                         'ET_F':ET_f, 'ET_F2':et_f2,
-                         'RECO_DT': reco_l, 'RECO_NT':reco_r})
+df_final = pd.DataFrame({'TIMESTAMP': date_era5, 'Ta': Ta_o, 'Ta_f': Ta_f,
+                         'Sonic Ta': sonic_temperature_o, 'CO2_mixing_ratio':co2_mix_ratio_o,
+                         'H2O_mixing_ratio': h2o_mix_ratio_o,
+                         'CO2_storage':co2_strg_o, 'CO2_strg': CO2_strg_f, 
+                         'H2O_storage': h2o_strg_o,
+                         'Pa': Pa_o, 'Pa_f':Pa_f, 'RH': RH_o, 'RH_f': RH_f,
+                         'Td': Td_o, 'Tc': Tc_o, 'Rn': NETRAD_o, 'Rn_f': NETRAD_f,
+                         'LWin': LWin_o, 'LWin_f': LWin_f, 'LWout': LWout_o,
+                         'LWout_f': LWout_f,'SWin': SWin_o, 'SWin_f': SWin_f,
+                         'SWout': SWout_o, 'SWout_f': SWout_f, 'PPFD': PPFD_o,
+                         'P_rain': P_rain_o, 'WS':wind_speed_o, 'WS_f': wind_speed_f,
+                         'MWS': MWS_o, 'MWS_f':MWS_f, 
+                         'WD': WD2, 'Ts': Ts_o, 'Ts_f': Ts_f, 'SWC': SWC_o,
+                         'WTD': WTD_o, 'SWC_f': SWC_f, 'SHF': SHF_o,
+                         'SHF_f': SHF_f, 'LE': LE_o, 'LE_f': LE_f, 'H': H_o,
+                         'H_f': H_f, 'NEE': NEE_o, 'NEE_f': NEE_f,
+                         'NEE_err': NEE_err,'VPD': VPD_o, 'VPD_f': VPD_f,
+                         'ustar': ustar_o,  'ustar_f': ustar_f, 'GPP_DT': gpp_l,
+                         'GPP_NT': gpp_r, 'ET': ET_o, 'ET_f': ET_f,
+                         'Reco_DT': reco_l, 'Reco_NT':reco_r})
 path = 'D:/Dropbox/David/LECS/eddy/Bosque/Salida PostProc/'
-df_final = df_final.round(4)
-df_final.to_csv(path+'LEVEL3_SDF_2014_2022.csv', index=False)
+df_final.to_csv(path+'LEVEL3_SDF_2014_2021_2.csv', index=False)
 print('Saving data to a csv')
 print('....................................')
-
 
